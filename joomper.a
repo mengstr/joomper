@@ -1,0 +1,198 @@
+	processor 6502
+
+NTSC		= 0
+PAL50		= 1
+PAL60		= 2
+
+ IFNCONST COMPILE_VERSION
+COMPILE_VERSION	= NTSC      ; change to compile for different regions
+ ENDIF
+
+        include "vcs.h"
+        include "macro.h"
+        include "xmacro.h"
+	include "color.h"
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+        seg.u Variables
+	org $80
+tmp 		ds 1
+platform	ds 8
+platformFrac	ds 8
+platformSpeed	ds 8
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+ echo "----",($00FE - *) , "bytes of RAM left"
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+ MAC MOVEPLATFORM
+.p    	SET {1}
+	clc
+	lda platformFrac+.p
+	adc platformSpeed+.p
+	sta platformFrac+.p
+	bcc .noextrainc
+	inc platform+.p
+.noextrainc
+	inc platform+.p
+ ENDM
+
+
+
+
+
+
+	seg Code
+        org $f000
+
+Start
+	CLEAN_START
+
+	lda #10
+	sta platform+0
+	lda #11
+	sta platform+1
+	lda #12
+	sta platform+2
+	lda #13
+	sta platform+3
+	lda #14
+	sta platform+4
+	lda #15
+	sta platform+5
+	lda #16
+	sta platform+6
+	lda #17
+	sta platform+7
+
+	lda #0
+	sta platformSpeed+0
+	lda #$20
+	sta platformSpeed+1
+	lda #$40
+	sta platformSpeed+2
+	lda #$60
+	sta platformSpeed+3
+	lda #$80
+	sta platformSpeed+4
+	lda #$a0
+	sta platformSpeed+5
+	lda #$d0
+	sta platformSpeed+6
+	lda #$ff
+	sta platformSpeed+7
+
+
+	lda #WHITE
+        sta COLUPF
+
+NextFrame
+	VERTICAL_SYNC	; 3 LINES
+
+	TIMER_SETUP 39	; VBLANK
+	
+	lda SWCHB       ; Test RESET switch
+        lsr             
+        bcc Start    
+
+	MOVEPLATFORM 0
+	MOVEPLATFORM 1
+	MOVEPLATFORM 2
+	MOVEPLATFORM 3
+	MOVEPLATFORM 4
+	MOVEPLATFORM 5
+	MOVEPLATFORM 6
+	MOVEPLATFORM 7
+        TIMER_WAIT
+	sta WSYNC
+        lda #BLACK
+        sta COLUBK
+	
+	ldy #0
+	ldx #0
+loop
+	sta WSYNC       ;    [0]
+	lda platform,x	;4
+	sta tmp		;3
+	cpy tmp		;3   [3]
+	bne skip	;2/3 [5]
+;	SLEEP 8		;8   [13]
+	lda BM0,x	;4   [17]
+        sta PF0		;3   [20]
+	lda BM1,x	;4   [24]
+        sta PF1		;3   [27]
+	lda BM2,x	;4   [31]
+        sta PF2		;3   [34]
+
+	SLEEP 6       	;6   [40]
+
+	lda BM3,x	;4   [44]
+        sta PF0		;3   [47]
+	lda BM4,x	;4   [51]
+        sta PF1		;3   [54]
+	lda BM5,x	;4   [58]
+        sta PF2		;3   [61]
+	inx		;2   [63]
+cont:
+	sta WSYNC       ;    [0]
+	iny		;2
+	cpy #192/2
+        bne loop	;3
+
+
+	TIMER_SETUP 29	; OVERSCAN
+        lda #BLACK+4 ; overscan and vblank is dark grey
+        sta COLUBK
+	lda #0
+	sta PF0
+	sta PF1
+	sta PF2
+
+        TIMER_WAIT
+        jmp NextFrame
+
+skip:
+	lda #0
+	sta PF0
+	sta PF1
+	sta PF2
+	jmp cont
+
+	BOUNDARY 0
+BM0 hex E000000000000000
+BM1 hex 0038010000000000
+BM2 hex 0000037000000000
+BM3 hex 00000000E0000000
+BM4 hex 0000000000380100
+BM5 hex 0000000000000370
+
+
+;BM0	hex 10204080000000000000000000000000000000000000000000000000000000000000000000000000
+;BM1	hex 00000000804020100804020100000000000000000000000000000000000000000000000000000000
+;BM2	hex 00000000000000000000000001020408102040800000000000000000000000000000000000000000
+;BM3	hex 00000000000000000000000000000000000000001020408000000000000000000000000000000000
+;BM4	hex 00000000000000000000000000000000000000000000000080402010080402010000000000000000
+;BM5	hex 00000000000000000000000000000000000000000000000000000000000000000102040810204080
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+ echo "----",($FFFC - *) , "bytes of ROM left"
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	org $FFFC
+        .word Start	; reset vector
+        .word Start	; BRK vector
+
+
+;
+; Cycle 22-28 PF0 displayed
+;       28-39 PF1 displayed
+;       39-49 PF2 displayed
+;       49-54 PF3/PF0 displayed
+;       54-65 PF4/PF1 displayed
+;       65-76 PF5/PF2displayed
+;
+
+
+
